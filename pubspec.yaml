@@ -1,0 +1,17 @@
+name: messenger_demo
+description: StayInspired messenger demo (Flutter).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # google_fonts подгружает Caveat / Fraunces / Archivo / Space Mono —
+  # нашу 4-шрифтовую систему из StayInspired, без ручного скачивания .ttf.
+  google_fonts: ^6.2.1
+
+flutter:
+  uses-material-design: true
