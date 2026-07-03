@@ -17,10 +17,11 @@ workflows:
       - name: Flutter packages
         script: flutter pub get
 
-      # Готовим iOS-проект (Generated.xcconfig, pod install) БЕЗ сборки.
-      # --config-only не запускает xcodebuild, значит и его пост-гейт подписи не сработает.
+      # Готовим iOS-проект (Generated.xcconfig) БЕЗ сборки и БЕЗ подписи.
+      # --config-only не запускает xcodebuild; --no-codesign убирает проверку
+      # сертификата, которую config-only всё равно делает для device-таргета.
       - name: Configure iOS project (no build)
-        script: flutter build ios --release --config-only
+        script: flutter build ios --release --config-only --no-codesign
 
       - name: Pods
         script: |
@@ -47,8 +48,15 @@ workflows:
       # Упаковываем .app в .ipa (IPA = zip с папкой Payload/).
       - name: Package unsigned IPA
         script: |
-          APP=$(find build/ios_unsigned -path '*Release-iphoneos/Runner.app' | head -1)
+          set -e
+          APP=$(find build/ios_unsigned -path '*Release-iphoneos/Runner.app' -type d | head -1)
+          if [ -z "$APP" ]; then
+            echo "ОШИБКА: Runner.app не найден. Раскладка build/ios_unsigned:"
+            find build/ios_unsigned -name '*.app' -maxdepth 6 || true
+            exit 1
+          fi
           echo "Найден .app: $APP"
+          rm -rf Payload MINI-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -r MINI-unsigned.ipa Payload
