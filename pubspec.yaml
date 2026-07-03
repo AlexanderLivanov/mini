@@ -1,7 +1,7 @@
 name: messenger_demo
-description: StayInspired messenger demo (Flutter).
+description: MINI messenger.
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+3   # bump после смены иконки — чтобы AltStore увидел обновление
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -9,9 +9,23 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # google_fonts подгружает Caveat / Fraunces / Archivo / Space Mono —
-  # нашу 4-шрифтовую систему из StayInspired, без ручного скачивания .ttf.
+  # google_fonts подгружает Caveat для логотипа.
   google_fonts: ^6.2.1
+
+dev_dependencies:
+  # flutter_launcher_icons генерирует все размеры иконок под iOS и Android
+  # из одного исходного PNG. dev-зависимость: нужен только при генерации, не в рантайме.
+  flutter_launcher_icons: ^0.14.1
+
+# Конфиг генератора иконок.
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"   # полная иконка (iOS + старый Android)
+  android: true
+  ios: true
+  remove_alpha_ios: true                     # iOS запрещает альфу в иконке — срезать
+  adaptive_icon_background: "#1A1A1A"         # фон адаптивной иконки Android
+  adaptive_icon_foreground: "assets/icon/icon.png"  # передний план (M)
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
