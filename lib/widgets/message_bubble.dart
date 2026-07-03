@@ -46,7 +46,17 @@ class SystemLine extends StatelessWidget {
 class MessageBubble extends StatelessWidget {
   final Message message;
   final String? senderName;
-  const MessageBubble({super.key, required this.message, this.senderName});
+  final VoidCallback? onTap;       // тап по пузырю (напр. пост канала → комментарии)
+  final VoidCallback? onLongPress; // долгое нажатие → пикер реакций
+  final VoidCallback? onSenderTap; // тап по имени отправителя в группе → карточка
+  const MessageBubble({
+    super.key,
+    required this.message,
+    this.senderName,
+    this.onTap,
+    this.onLongPress,
+    this.onSenderTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -55,43 +65,42 @@ class MessageBubble extends StatelessWidget {
     // Асимметричное скругление: острый угол снизу-справа (моё) / снизу-слева (чужое).
     final radius = mine
         ? const BorderRadius.only(
-            topLeft: Radius.circular(kRadius),
-            topRight: Radius.circular(kRadius),
-            bottomLeft: Radius.circular(kRadius),
-            bottomRight: Radius.circular(4))
+            topLeft: Radius.circular(kRadius), topRight: Radius.circular(kRadius),
+            bottomLeft: Radius.circular(kRadius), bottomRight: Radius.circular(4))
         : const BorderRadius.only(
-            topLeft: Radius.circular(kRadius),
-            topRight: Radius.circular(kRadius),
-            bottomRight: Radius.circular(kRadius),
-            bottomLeft: Radius.circular(4));
+            topLeft: Radius.circular(kRadius), topRight: Radius.circular(kRadius),
+            bottomRight: Radius.circular(kRadius), bottomLeft: Radius.circular(4));
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
-        crossAxisAlignment:
-            mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           // Имя отправителя в группе (только для чужих сообщений).
           if (senderName != null)
             Padding(
               padding: const EdgeInsets.only(left: 6, bottom: 2),
-              child: Text(senderName!,
-                  style: AppText.sans(11.5,
-                      color: AppColors.inkSoft, weight: FontWeight.w600)),
+              child: GestureDetector(
+                onTap: onSenderTap,
+                child: Text(senderName!,
+                    style: AppText.sans(11.5, color: AppColors.inkSoft, weight: FontWeight.w600)),
+              ),
             ),
           ConstrainedBox(
-            constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.78),
-            child: _content(context, mine, radius),
+            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+            // GestureDetector ловит тап и долгое нажатие на пузыре.
+            child: GestureDetector(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              child: _content(context, mine, radius),
+            ),
           ),
           if (message.reactions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Wrap(
                 spacing: 4,
-                children: message.reactions
-                    .map((r) => _ReactionChip(reaction: r))
-                    .toList(),
+                children: message.reactions.map((r) => _ReactionChip(reaction: r)).toList(),
               ),
             ),
         ],
@@ -107,14 +116,9 @@ class MessageBubble extends StatelessWidget {
       case MsgKind.photo:
         return _MediaTile(label: message.text, isVideo: false, radius: radius);
       case MsgKind.video:
-        return _MediaTile(
-            label: message.text,
-            isVideo: true,
-            duration: message.duration,
-            radius: radius);
+        return _MediaTile(label: message.text, isVideo: true, duration: message.duration, radius: radius);
       case MsgKind.text:
-      case MsgKind
-            .system: // system сюда не попадает (рисуется через SystemLine)
+      case MsgKind.system: // system сюда не попадает (рисуется через SystemLine)
         return _TextBubble(message: message, mine: mine, radius: radius);
     }
   }
@@ -125,25 +129,21 @@ class _TextBubble extends StatelessWidget {
   final Message message;
   final bool mine;
   final BorderRadius radius;
-  const _TextBubble(
-      {required this.message, required this.mine, required this.radius});
+  const _TextBubble({required this.message, required this.mine, required this.radius});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-          color: mine ? AppColors.ink : AppColors.sage, borderRadius: radius),
+      decoration: BoxDecoration(color: mine ? AppColors.ink : AppColors.sage, borderRadius: radius),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(message.text,
-              style: AppText.sans(15,
-                  height: 1.42, color: mine ? Colors.white : AppColors.ink)),
+              style: AppText.sans(15, height: 1.42, color: mine ? Colors.white : AppColors.ink)),
           const SizedBox(height: 3),
           Text(message.time,
-              style: AppText.sans(10,
-                  color: mine ? Colors.white54 : AppColors.inkFaint)),
+              style: AppText.sans(10, color: mine ? Colors.white54 : AppColors.inkFaint)),
         ],
       ),
     );
@@ -164,8 +164,7 @@ class _StickerTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(kRadius),
       ),
       // Caveat придаёт стикеру «рукописную» лёгкость.
-      child:
-          Text('« $label »', style: AppText.logo(26, color: AppColors.inkSoft)),
+      child: Text('« $label »', style: AppText.logo(26, color: AppColors.inkSoft)),
     );
   }
 }
@@ -176,50 +175,36 @@ class _MediaTile extends StatelessWidget {
   final bool isVideo;
   final String? duration;
   final BorderRadius radius;
-  const _MediaTile(
-      {required this.label,
-      required this.isVideo,
-      this.duration,
-      required this.radius});
+  const _MediaTile({required this.label, required this.isVideo, this.duration, required this.radius});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: radius,
       child: Container(
-        width: 230,
-        height: 150,
+        width: 230, height: 150,
         color: AppColors.sage,
         child: Stack(
           children: [
             // Иконка по центру: «горы» для фото, «play» для видео.
             Center(
-              child: Icon(
-                  isVideo ? Icons.play_circle_outline : Icons.image_outlined,
-                  size: 40,
-                  color: AppColors.inkSoft),
+              child: Icon(isVideo ? Icons.play_circle_outline : Icons.image_outlined,
+                  size: 40, color: AppColors.inkSoft),
             ),
             // Подпись снизу.
             Positioned(
-              left: 10,
-              bottom: 8,
-              child: Text(label,
-                  style: AppText.sans(12,
-                      color: AppColors.ink, weight: FontWeight.w600)),
+              left: 10, bottom: 8,
+              child: Text(label, style: AppText.sans(12, color: AppColors.ink, weight: FontWeight.w600)),
             ),
             // Бейдж длительности для видео.
             if (isVideo && duration != null)
               Positioned(
-                right: 8,
-                top: 8,
+                right: 8, top: 8,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                      color: AppColors.ink,
-                      borderRadius: BorderRadius.circular(999)),
-                  child: Text(duration!,
-                      style: AppText.sans(10, color: Colors.white)),
+                    color: AppColors.ink, borderRadius: BorderRadius.circular(999)),
+                  child: Text(duration!, style: AppText.sans(10, color: Colors.white)),
                 ),
               ),
           ],
@@ -245,8 +230,7 @@ class _ReactionChip extends StatelessWidget {
         border: mine ? null : Border.all(color: AppColors.rule),
       ),
       child: Text('${reaction.emoji} ${reaction.count}',
-          style:
-              AppText.sans(11.5, color: mine ? Colors.white : AppColors.ink)),
+          style: AppText.sans(11.5, color: mine ? Colors.white : AppColors.ink)),
     );
   }
 }

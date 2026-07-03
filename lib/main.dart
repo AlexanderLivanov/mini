@@ -1,32 +1,44 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
-import 'screens/chat_list_screen.dart';
+import 'state/app_state.dart';
+import 'screens/onboarding_screen.dart';
 
-/// main() — точка входа любого Dart-приложения: систему запускает именно её.
-/// runApp() «монтирует» корневой виджет в дерево и запускает отрисовку.
-void main() => runApp(const MiniApp());
+/// main() — точка входа. runApp() монтирует корневой виджет.
+void main() => runApp(const MiniRoot());
 
-/// MiniApp — корневой виджет приложения.
-/// StatelessWidget = виджет без изменяемого состояния: рисуется по входным данным.
-class MiniApp extends StatelessWidget {
-  const MiniApp({super.key});
+/// MiniRoot — корень. Stateful, потому что владеет объектом AppState (создаёт его
+/// один раз и освобождает при завершении). AppScope раздаёт состояние вниз.
+class MiniRoot extends StatefulWidget {
+  const MiniRoot({super.key});
+  @override
+  State<MiniRoot> createState() => _MiniRootState();
+}
 
-  /// build() — «функция отрисовки». Flutter вызывает её, чтобы получить UI.
-  /// MaterialApp даёт навигацию, тему и базовую механику приложения.
+class _MiniRootState extends State<MiniRoot> {
+  final AppState _state = AppState();
+
+  @override
+  void dispose() {
+    _state.dispose(); // ChangeNotifier нужно освобождать
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MINI',
-      debugShowCheckedModeBanner: false, // убрать красную ленту "DEBUG"
-      theme: ThemeData(
-        scaffoldBackgroundColor: AppColors.paper,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.ink,
-          primary: AppColors.ink,
+    // AppScope стоит ВЫШЕ MaterialApp — значит любой экран, открытый через
+    // Navigator, тоже видит состояние (он строится под этим AppScope).
+    return AppScope(
+      notifier: _state,
+      child: MaterialApp(
+        title: 'MINI',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          scaffoldBackgroundColor: AppColors.paper,
+          colorScheme: ColorScheme.fromSeed(seedColor: AppColors.ink, primary: AppColors.ink),
+          useMaterial3: true,
         ),
-        useMaterial3: true,
+        home: const OnboardingScreen(),
       ),
-      home: const ChatListScreen(), // первый экран — список чатов
     );
   }
 }

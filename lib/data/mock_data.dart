@@ -1,18 +1,21 @@
 import '../models.dart';
 
-/// Участники — для подписи отправителей в группах (взято из прототипа MINI).
+/// Участники — для подписи отправителей и карточки участника в группах.
 const Map<String, Person> people = {
-  'nastya': Person(initials: 'Н', name: 'Настя', online: true),
-  'igor':   Person(initials: 'И', name: 'Игорь'),
-  'lena':   Person(initials: 'Л', name: 'Лена', online: true),
+  'nastya': Person(initials: 'Н', name: 'Настя', online: true,
+      bio: 'Дизайнер интерфейсов. Собираю референсы и тихие плейлисты.'),
+  'igor':   Person(initials: 'И', name: 'Игорь',
+      bio: 'Фронтенд. Верю в аккуратные отступы.'),
+  'lena':   Person(initials: 'Л', name: 'Лена', online: true,
+      bio: 'Иллюстратор. Рисую по утрам.'),
 };
 
-/// mockChats — реальные данные из прототипа MINI: личные чаты, группа и канал,
-/// с разными типами сообщений (текст, стикер, фото, видео), датами и реакциями.
+/// Реальные чаты из прототипа MINI.
 final List<Chat> mockChats = [
   Chat(
     id: 'julia', type: ChatType.dm, name: 'Юля', initials: 'Ю',
     online: true, time: '9:41', unread: 2, preview: 'Ездили за город',
+    bio: 'Фотографирую на плёнку. Люблю за город и тишину.',
     messages: const [
       Message(text: 'Привет!', mine: false, time: '9:39', date: 'Сегодня',
           reactions: [Reaction(emoji: '👍', count: 1)]),
@@ -57,6 +60,7 @@ final List<Chat> mockChats = [
   Chat(
     id: 'sonya', type: ChatType.dm, name: 'Соня', initials: 'С',
     lastSeen: 'была в сети в 9:10', time: '9:02', preview: 'Видео',
+    bio: 'Снимаю закаты. Немного бариста, немного путешественник.',
     messages: const [
       Message(text: 'Смотри, какой был закат', mine: false, time: 'Вчера', date: 'Вчера'),
       Message(kind: MsgKind.photo, text: 'закат у моря', mine: false, time: 'Вчера', date: 'Вчера',
@@ -71,6 +75,7 @@ final List<Chat> mockChats = [
   Chat(
     id: 'pasha', type: ChatType.dm, name: 'Паша', initials: 'П',
     lastSeen: 'был в сети в 8:30', time: '9:10', preview: 'Договорились',
+    bio: 'Играю в баскетбол по вечерам. Кофе без сахара.',
     messages: const [
       Message(text: 'Встречаемся в семь на площадке?', mine: false, time: '9:05', date: 'Сегодня'),
       Message(text: 'Договорились, буду вовремя', mine: true, time: '9:10', date: 'Сегодня'),
@@ -79,13 +84,15 @@ final List<Chat> mockChats = [
   Chat(
     id: 'mama', type: ChatType.dm, name: 'Мама', initials: 'М',
     lastSeen: 'была в сети вчера', time: 'Вчера', preview: 'Позвони, когда сможешь',
+    owe: true, // ты обещал ответить — покажем мягкое напоминание
+    bio: 'Готовит лучший борщ. Звонит по воскресеньям.',
     messages: const [
       Message(text: 'Позвони, когда сможешь', mine: false, time: 'Вчера', date: 'Вчера'),
     ],
   ),
 ];
 
-/// Пулы авто-ответов по контактам (как в прототипе): для каждого DM — свои реплики.
+/// Пулы авто-ответов по контактам.
 const Map<String, List<String>> replyPools = {
   'julia': ['У меня спокойно — читаю и пью чай', 'Давай на неделе выберемся вместе?',
     'Пришлю тебе фото оттуда, ты оценишь', 'Согласна, тишина лечит'],
@@ -96,3 +103,13 @@ const Map<String, List<String>> replyPools = {
   'mama': ['Спасибо, что написал! Как ты там?', 'Позвони вечером, расскажу новости',
     'Береги себя и ешь нормально', 'Целую!'],
 };
+
+/// Комментарии под постом канала (для экрана «Комментарии»).
+const List<Comment> channelComments = [
+  Comment(author: 'Настя', initials: 'Н', text: 'Наконец-то мессенджер без ленты. Спасибо!', time: '8:12'),
+  Comment(author: 'Игорь', initials: 'И', text: 'Тихие часы — топ. Жду папки.', time: '8:20'),
+  Comment(author: 'Лена', initials: 'Л', text: 'Обложка красивая ❤️', time: '9:05'),
+];
+
+/// Набор эмодзи для пикера реакций (как REACTS в прототипе).
+const List<String> reactionSet = ['❤️', '👍', '🔥', '😂', '👀'];

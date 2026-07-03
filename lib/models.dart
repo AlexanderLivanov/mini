@@ -1,5 +1,4 @@
-/// Тип чата: определяет форму аватара, значок в списке и права
-/// (канал — только чтение, без поля ввода).
+/// Тип чата: форма аватара, значок в списке, права (канал — только чтение).
 enum ChatType { dm, group, channel }
 
 /// Тип содержимого сообщения — как его рисовать.
@@ -7,31 +6,30 @@ enum MsgKind { text, sticker, photo, video, system }
 
 /// Reaction — эмодзи-реакция под сообщением и её счётчик.
 class Reaction {
-  final String emoji; // сам эмодзи, напр. '❤️'
-  final int count; // сколько раз поставили
-  final bool mine; // поставил ли реакцию я (тогда «чип» тёмный)
+  final String emoji;
+  final int count;
+  final bool mine;
   const Reaction({required this.emoji, required this.count, this.mine = false});
 }
 
-/// Person — участник: нужен для подписи отправителя в группах.
+/// Person — участник: имя, инициалы, «о себе» (для карточки участника в группах).
 class Person {
   final String initials;
   final String name;
   final bool online;
-  const Person(
-      {required this.initials, required this.name, this.online = false});
+  final String bio;
+  const Person({required this.initials, required this.name, this.online = false, this.bio = ''});
 }
 
-/// Message — одно сообщение. Поле `kind` решает, как его отрисовать.
+/// Message — одно сообщение. `kind` решает отрисовку.
 class Message {
-  final MsgKind kind; // тип содержимого
-  final String text; // текст / подпись стикера / метка медиа / текст системного
-  final bool mine; // true — моё (справа, тёмное)
-  final String time; // время-строка, напр. '9:41'
-  final String
-      date; // ярлык даты для разделителя: 'Сегодня' / 'Вчера' / '1 июля'
-  final String? senderId; // id отправителя в группе (для подписи над пузырём)
-  final String? duration; // длительность видео, напр. '0:14'
+  final MsgKind kind;
+  final String text;
+  final bool mine;
+  final String time;
+  final String date;
+  final String? senderId;
+  final String? duration;
   final List<Reaction> reactions;
 
   const Message({
@@ -44,20 +42,45 @@ class Message {
     this.duration,
     this.reactions = const [],
   });
+
+  /// copyWith — вернуть копию сообщения с изменёнными полями (иммутабельное
+  /// обновление). Нужен, чтобы «поменять» реакции: мы не мутируем объект,
+  /// а заменяем его новой копией в списке.
+  Message copyWith({List<Reaction>? reactions}) => Message(
+        kind: kind,
+        text: text,
+        mine: mine,
+        time: time,
+        date: date,
+        senderId: senderId,
+        duration: duration,
+        reactions: reactions ?? this.reactions,
+      );
 }
 
-/// Chat — один диалог/группа/канал.
+/// Comment — комментарий под постом канала.
+class Comment {
+  final String author;
+  final String initials;
+  final String text;
+  final String time;
+  const Comment({required this.author, required this.initials, required this.text, required this.time});
+}
+
+/// Chat — диалог / группа / канал.
 class Chat {
   final String id;
   final ChatType type;
   final String name;
   final String initials;
   final bool online;
-  final String lastSeen; // 'была в сети в 9:10' и т.п. (для DM не в сети)
-  final String time; // время последнего сообщения (в списке)
+  final String lastSeen;
+  final String time;
   final int unread;
-  final String preview; // готовое превью для строки списка
-  final String subscribers; // для канала: '1 240 подписчиков'
+  final String preview;
+  final String subscribers;
+  final String bio;      // «о себе» собеседника (для карточки в DM)
+  final bool owe;        // «вы обещали ответить позже» — мягкое напоминание
   final List<Message> messages;
 
   const Chat({
@@ -71,20 +94,17 @@ class Chat {
     this.unread = 0,
     this.preview = '',
     this.subscribers = '',
+    this.bio = '',
+    this.owe = false,
     required this.messages,
   });
 
   bool get isDM => type == ChatType.dm;
   bool get isChannel => type == ChatType.channel;
-
-  /// Группа и канал — скруглённый квадрат; личный чат — круг.
   bool get roundedAvatar => type != ChatType.dm;
-
-  /// Значок рядом с именем в списке: канал 📢, группа 👥, DM — пусто.
   String get badge =>
       type == ChatType.channel ? '📢' : (type == ChatType.group ? '👥' : '');
 
-  /// Статус в шапке переписки.
   String get status {
     if (isChannel) return subscribers;
     if (online) return 'в сети';

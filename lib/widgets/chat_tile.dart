@@ -27,18 +27,15 @@ class ChatTile extends StatelessWidget {
                     children: [
                       // Значок группы/канала перед именем (📢 / 👥).
                       if (chat.badge.isNotEmpty) ...[
-                        Text(chat.badge,
-                            style: AppText.sans(11, color: AppColors.inkFaint)),
+                        Text(chat.badge, style: AppText.sans(11, color: AppColors.inkFaint)),
                         const SizedBox(width: 5),
                       ],
                       Expanded(
                         child: Text(chat.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: AppText.sans(16, weight: FontWeight.w600)),
                       ),
-                      Text(chat.time,
-                          style: AppText.sans(12, color: AppColors.inkFaint)),
+                      Text(chat.time, style: AppText.sans(12, color: AppColors.inkFaint)),
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -46,10 +43,8 @@ class ChatTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(chat.preview,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                AppText.sans(13.5, color: AppColors.inkSoft)),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: AppText.sans(13.5, color: AppColors.inkSoft)),
                       ),
                       if (chat.unread > 0) _UnreadBadge(count: chat.unread),
                     ],
@@ -78,29 +73,22 @@ class _Avatar extends StatelessWidget {
         : BorderRadius.circular(27);
 
     return SizedBox(
-      width: 54,
-      height: 54,
+      width: 54, height: 54,
       child: Stack(
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 54, height: 54,
             alignment: Alignment.center,
-            decoration:
-                BoxDecoration(color: AppColors.sage, borderRadius: shape),
-            child: Text(chat.initials,
-                style: AppText.sans(19, weight: FontWeight.w600)),
+            decoration: BoxDecoration(color: AppColors.sage, borderRadius: shape),
+            child: Text(chat.initials, style: AppText.sans(19, weight: FontWeight.w600)),
           ),
           if (chat.isDM && chat.online)
             Positioned(
-              right: 1,
-              bottom: 1,
+              right: 1, bottom: 1,
               child: Container(
-                width: 13,
-                height: 13,
+                width: 13, height: 13,
                 decoration: BoxDecoration(
-                  color: AppColors.online,
-                  shape: BoxShape.circle,
+                  color: AppColors.online, shape: BoxShape.circle,
                   border: Border.all(color: AppColors.paper, width: 2.5),
                 ),
               ),
@@ -123,11 +111,9 @@ class _UnreadBadge extends StatelessWidget {
       height: 20,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-          color: AppColors.ink, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(999)),
       child: Text('$count',
-          style:
-              AppText.sans(11.5, color: Colors.white, weight: FontWeight.w600)),
+          style: AppText.sans(11.5, color: Colors.white, weight: FontWeight.w600)),
     );
   }
 }
