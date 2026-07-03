@@ -1,14 +1,15 @@
-import 'dart:async'; // для Timer (задержки и посимвольный набор)
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models.dart';
+import '../data/mock_data.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/typing_indicator.dart';
 import '../widgets/composer.dart';
 
-/// ConversationScreen — экран одной переписки.
-/// Это StatefulWidget, потому что содержимое МЕНЯЕТСЯ во времени: приходят
-/// сообщения, собеседник «печатает вживую», обновляется поле ввода.
+/// ConversationScreen — экран переписки. Stateful: сообщения приходят, собеседник
+/// «печатает вживую», работает «толк» с тряской. Канал — только чтение.
 class ConversationScreen extends StatefulWidget {
   final Chat chat;
   const ConversationScreen({super.key, required this.chat});
@@ -17,114 +18,107 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-/// _ConversationScreenState — здесь живёт изменяемое состояние экрана.
-class _ConversationScreenState extends State<ConversationScreen> {
-  late final List<Message> _messages;            // изменяемая копия переписки
-  final TextEditingController _input = TextEditingController(); // «пульт» поля ввода
-  final ScrollController _scroll = ScrollController();          // «пульт» прокрутки
+// TickerProviderStateMixin — нужен для анимации тряски (нескольких контроллеров).
+class _ConversationScreenState extends State<ConversationScreen>
+    with TickerProviderStateMixin {
+  late final List<Message> _messages;
+  final TextEditingController _input = TextEditingController();
+  final ScrollController _scroll = ScrollController();
 
-  bool _typing = false;   // показывать ли «прыгающие точки»
-  String? _liveText;      // текст, набираемый собеседником «вживую» (null — не набирает)
-  Timer? _replyTimer;     // таймер задержки перед ответом
-  Timer? _liveTimer;      // таймер посимвольного набора
+  bool _typing = false;
+  String? _liveText;
+  Timer? _replyTimer;
+  Timer? _liveTimer;
+  int _replyIx = 0;
 
-  // Пул авто-ответов из макета MINI.
-  static const List<String> _replies = [
-    'Звучит отлично',
-    'Да, давай — сейчас пришлю',
-    'Расскажи подробнее, интересно',
-    'Хорошо, договорились',
-    'Только что вспомнил — надо обсудить',
-  ];
-  int _replyIx = 0; // какой ответ выдать следующим (по кругу)
+  late final AnimationController _shake; // короткая тряска ленты по «толку»
 
   @override
   void initState() {
     super.initState();
-    // List.of создаёт ИЗМЕНЯЕМУЮ копию истории — исходные данные не трогаем.
     _messages = List.of(widget.chat.messages);
+    _shake = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
   }
 
   @override
   void dispose() {
-    // Освобождаем контроллеры и таймеры, иначе утечки и падения после закрытия.
     _input.dispose();
     _scroll.dispose();
     _replyTimer?.cancel();
     _liveTimer?.cancel();
+    _shake.dispose();
     super.dispose();
   }
 
-  /// _now() — текущее время в формате Ч:ММ (как в макете).
   String _now() {
     final t = TimeOfDay.now();
     return '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
   }
 
-  /// _scrollToBottom() — прокрутить ленту к последнему сообщению.
-  /// addPostFrameCallback ждёт, пока Flutter дорисует новый элемент, и лишь потом
-  /// прокручивает — иначе высота ленты ещё не пересчитана.
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(
-          _scroll.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+        _scroll.animateTo(_scroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
       }
     });
   }
 
-  /// _send() — отправить своё сообщение и запустить «живой» авто-ответ.
+  /// _send() — отправить своё сообщение. Авто-ответ запускаем только для личных чатов.
   void _send() {
     final text = _input.text.trim();
-    if (text.isEmpty) return; // пустое не отправляем
-
-    // setState сообщает Flutter: «состояние изменилось, перерисуй экран».
+    if (text.isEmpty) return;
     setState(() {
-      _messages.add(Message(text: text, mine: true, time: _now()));
+      _messages
+          .add(Message(text: text, mine: true, time: _now(), date: 'Сегодня'));
       _input.clear();
     });
     _scrollToBottom();
 
-    // Через 750мс собеседник начинает «печатать» (как в оригинале MINI).
-    _replyTimer?.cancel();
-    _replyTimer = Timer(const Duration(milliseconds: 750), _startLiveReply);
+    if (widget.chat.isDM) {
+      _replyTimer?.cancel();
+      _replyTimer = Timer(const Duration(milliseconds: 750), _startLiveReply);
+    }
   }
 
-  /// _startLiveReply() — сначала точки, затем посимвольный набор ответа.
+  /// _startLiveReply() — точки, затем посимвольный набор ответа из пула контакта.
   void _startLiveReply() {
-    if (!mounted) return; // экран уже закрыт — ничего не делаем
-    final reply = _replies[_replyIx % _replies.length];
+    if (!mounted) return;
+    // Берём пул реплик именно этого контакта (или общий запасной).
+    final pool = replyPools[widget.chat.id] ??
+        const [
+          'Звучит отлично',
+          'Хорошо, договорились',
+          'Расскажи подробнее, интересно'
+        ];
+    final reply = pool[_replyIx % pool.length];
     _replyIx++;
 
-    setState(() => _typing = true); // фаза 1: прыгающие точки
+    setState(() => _typing = true);
     _scrollToBottom();
 
-    // Через 700мс точки сменяются набором «вживую».
     Timer(const Duration(milliseconds: 700), () {
       if (!mounted) return;
       setState(() {
         _typing = false;
-        _liveText = ''; // фаза 2: пустой «живой» пузырь, сейчас начнём набирать
+        _liveText = '';
       });
-
       int i = 0;
       _liveTimer?.cancel();
-      // Каждые 45мс добавляем по одному символу — эффект живого набора.
-      _liveTimer = Timer.periodic(const Duration(milliseconds: 45), (timer) {
+      // 55мс на символ — как в оригинале MINI.
+      _liveTimer = Timer.periodic(const Duration(milliseconds: 55), (timer) {
         if (!mounted) {
           timer.cancel();
           return;
         }
         i++;
         if (i > reply.length) {
-          // Набор закончен: превращаем «живой» текст в обычное сообщение.
           timer.cancel();
           setState(() {
             _liveText = null;
-            _messages.add(Message(text: reply, mine: false, time: _now()));
+            _messages.add(Message(
+                text: reply, mine: false, time: _now(), date: 'Сегодня'));
           });
           _scrollToBottom();
         } else {
@@ -135,7 +129,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
     });
   }
 
-  /// _stub() — заглушка для nudge/schedule/меню: показываем, что фича задумана.
+  /// _nudge() — «толк»: добавляем служебную строку и трясём ленту (как miniShake).
+  void _nudge() {
+    setState(() {
+      _messages.add(const Message(
+          kind: MsgKind.system, text: 'Вы отправили «толк»', mine: true));
+    });
+    _shake.forward(from: 0); // проиграть тряску с начала
+    _scrollToBottom();
+  }
+
   void _stub(String label) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(label), duration: const Duration(seconds: 1)),
@@ -144,77 +147,121 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Нужна ли дополнительная строка в конце ленты (точки ИЛИ живой пузырь)?
+    final chat = widget.chat;
     final extra = (_typing || _liveText != null) ? 1 : 0;
 
     return Scaffold(
       appBar: _buildHeader(),
       body: Column(
         children: [
-          // Лента сообщений.
           Expanded(
-            child: ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              itemCount: _messages.length + extra,
-              itemBuilder: (context, index) {
-                // Последняя «виртуальная» строка — точки или живой пузырь.
-                if (index == _messages.length) {
-                  if (_typing) return const TypingIndicator();
-                  if (_liveText != null) return _LiveBubble(text: _liveText!);
-                }
-                return MessageBubble(message: _messages[index]);
+            // AnimatedBuilder сдвигает всю ленту по горизонтали во время «толка».
+            child: AnimatedBuilder(
+              animation: _shake,
+              builder: (context, child) {
+                // Затухающая синусоида: сильнее в начале, к концу — в ноль.
+                final dx = math.sin(_shake.value * math.pi * 4) *
+                    (1 - _shake.value) *
+                    7;
+                return Transform.translate(offset: Offset(dx, 0), child: child);
               },
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                itemCount: _messages.length + extra,
+                itemBuilder: (context, index) {
+                  if (index == _messages.length) {
+                    if (_typing) return const TypingIndicator();
+                    if (_liveText != null) return _LiveBubble(text: _liveText!);
+                  }
+                  return _row(index);
+                },
+              ),
             ),
           ),
-          // Панель ввода.
-          Composer(
-            controller: _input,
-            onSend: _send,
-            onNudge: () => _stub('Мягкое напоминание — скоро'),
-            onSchedule: () => _stub('Письмо в будущее — скоро'),
-          ),
+          // Канал — только чтение; в личных/группах — полноценный композер.
+          if (chat.isChannel)
+            const _ReadOnlyBar(label: 'Канал · только просмотр')
+          else
+            Composer(
+              controller: _input,
+              onSend: _send,
+              onNudge: _nudge,
+              onSchedule: () => _stub('Письмо в будущее — скоро'),
+            ),
         ],
       ),
     );
   }
 
-  /// _buildHeader() — верхняя панель: назад, аватар, имя и статус, меню «⋮».
+  /// _row() — строит одну строку ленты: при смене даты добавляет разделитель,
+  /// системные сообщения рисует по центру, остальные — пузырём (с именем в группе).
+  Widget _row(int index) {
+    final m = _messages[index];
+
+    // Системное сообщение — отдельная центрированная строка.
+    if (m.kind == MsgKind.system) return SystemLine(text: m.text);
+
+    // Имя отправителя показываем только для чужих сообщений в группе.
+    final sender =
+        (!m.mine && widget.chat.type == ChatType.group && m.senderId != null)
+            ? people[m.senderId!]?.name
+            : null;
+
+    final bubble = MessageBubble(message: m, senderName: sender);
+
+    // Разделитель даты — если у предыдущего сообщения дата другая.
+    final showDate = m.date.isNotEmpty &&
+        (index == 0 || _messages[index - 1].date != m.date);
+    if (showDate) {
+      return Column(children: [DateSeparator(label: m.date), bubble]);
+    }
+    return bubble;
+  }
+
   PreferredSizeWidget _buildHeader() {
+    final chat = widget.chat;
+    // Форма мини-аватара в шапке: круг для DM, скруглённый квадрат для группы/канала.
+    final avatarShape = chat.roundedAvatar
+        ? BorderRadius.circular(11)
+        : BorderRadius.circular(19);
+
     return AppBar(
       backgroundColor: AppColors.paper,
       elevation: 0,
-      foregroundColor: AppColors.ink, // цвет стрелки «назад»
+      foregroundColor: AppColors.ink,
       titleSpacing: 0,
       title: Row(
         children: [
-          // Мини-аватар в шапке.
           Container(
             width: 38,
             height: 38,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(color: AppColors.sage, shape: BoxShape.circle),
-            child: Text(widget.chat.initials, style: AppText.sans(14, weight: FontWeight.w600)),
+            decoration:
+                BoxDecoration(color: AppColors.sage, borderRadius: avatarShape),
+            child: Text(chat.initials,
+                style: AppText.sans(14, weight: FontWeight.w600)),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(widget.chat.name, style: AppText.sans(15.5, weight: FontWeight.w600)),
-              // Статус: если онлайн — зелёным, иначе приглушённым серым.
-              Text(widget.chat.status,
+              Text(chat.name,
+                  style: AppText.sans(15.5, weight: FontWeight.w600)),
+              Text(chat.status,
                   style: AppText.sans(12,
-                      color: widget.chat.online ? AppColors.online : AppColors.inkFaint)),
+                      color: (chat.isDM && chat.online)
+                          ? AppColors.online
+                          : AppColors.inkFaint)),
             ],
           ),
         ],
       ),
       actions: [
         IconButton(
-          onPressed: () => _stub('Меню чата — скоро'),
-          icon: const Icon(Icons.more_vert, size: 20),
-        ),
+            onPressed: () => _stub('Меню чата — скоро'),
+            icon: const Icon(Icons.more_vert, size: 20)),
       ],
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
@@ -224,7 +271,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 }
 
-/// _LiveBubble — шалфейный пузырь с мигающим текстом: собеседник «печатает вживую».
+/// _LiveBubble — шалфейный пузырь: собеседник «печатает вживую» (посимвольно).
 class _LiveBubble extends StatelessWidget {
   final String text;
   const _LiveBubble({required this.text});
@@ -236,7 +283,8 @@ class _LiveBubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 3),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
         decoration: const BoxDecoration(
           color: AppColors.sage,
           borderRadius: BorderRadius.only(
@@ -246,10 +294,33 @@ class _LiveBubble extends StatelessWidget {
             bottomLeft: Radius.circular(4),
           ),
         ),
-        // Пока текст пустой — показываем многоточие, чтобы пузырь не «схлопывался».
-        child: Text(
-          text.isEmpty ? '…' : text,
-          style: AppText.sans(15, height: 1.42, color: AppColors.ink),
+        child: Text(text.isEmpty ? '…' : text,
+            style: AppText.sans(15, height: 1.42, color: AppColors.ink)),
+      ),
+    );
+  }
+}
+
+/// _ReadOnlyBar — нижняя полоса для канала (нельзя писать).
+class _ReadOnlyBar extends StatelessWidget {
+  final String label;
+  const _ReadOnlyBar({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.paper,
+        border: Border(top: BorderSide(color: AppColors.rule)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+          child: Text(label,
+              textAlign: TextAlign.center,
+              style: AppText.sans(13, color: AppColors.inkFaint)),
         ),
       ),
     );
