@@ -1,32 +1,57 @@
 workflows:
-  ios-unsigned:                          # идентификатор воркфлоу
-    name: iOS Unsigned (for sideloading) # имя в дашборде Codemagic
-    instance_type: mac_mini_m2           # бесплатная M2-машина (500 мин/мес)
-    max_build_duration: 60               # предохранитель: убить сборку после 60 мин
+  ios-unsigned:
+    name: iOS Unsigned (for sideloading)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
 
     environment:
-      flutter: stable                    # канал Flutter SDK
-      xcode: latest                      # версия Xcode
-      cocoapods: default                 # менеджер нативных iOS-зависимостей
+      # ВАЖНО: пиним точную версию Flutter, а не 'stable'.
+      # 'stable' плавает и однажды сломает сборку сменой поведения (как сейчас).
+      # Подставь версию, на которой собирался рабочий +1 (flutter --version),
+      # либо любую известно-рабочую. Пример:
+      flutter: 3.32.0
+      xcode: latest
+      cocoapods: default
 
     scripts:
-      # Шаг 1 — подтянуть зависимости из pubspec.yaml (в т.ч. google_fonts).
       - name: Flutter packages
         script: flutter pub get
 
-      # Шаг 2 — скомпилировать НЕподписанный .app.
-      # --no-codesign = не трогаем сертификаты; подпишет AltStore на твоём ПК.
-      - name: Build iOS (no codesign)
-        script: flutter build ios --release --no-codesign
+      # Готовим iOS-проект (Generated.xcconfig, pod install) БЕЗ сборки.
+      # --config-only не запускает xcodebuild, значит и его пост-гейт подписи не сработает.
+      - name: Configure iOS project (no build)
+        script: flutter build ios --release --config-only
 
-      # Шаг 3 — вручную упаковать .app в .ipa.
-      # IPA = обычный zip с папкой Payload/ внутри, где лежит Runner.app.
+      - name: Pods
+        script: |
+          cd ios
+          pod install
+
+      # Собираем НЕподписанный .app напрямую, отключив подпись на уровне билд-системы.
+      # Именно это обходит обманчивую ошибку про Development Team.
+      - name: Build unsigned .app (xcodebuild)
+        script: |
+          cd ios
+          xcodebuild \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ../build/ios_unsigned \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      # Упаковываем .app в .ipa (IPA = zip с папкой Payload/).
       - name: Package unsigned IPA
         script: |
-          cd build/ios/iphoneos
-          mkdir Payload
-          cp -r Runner.app Payload/
+          APP=$(find build/ios_unsigned -path '*Release-iphoneos/Runner.app' | head -1)
+          echo "Найден .app: $APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
           zip -r MINI-unsigned.ipa Payload
 
     artifacts:
-      - build/ios/iphoneos/*.ipa         # что отдать на скачивание
+      - MINI-unsigned.ipa

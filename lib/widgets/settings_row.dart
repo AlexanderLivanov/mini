@@ -6,10 +6,10 @@ import '../theme.dart';
 class SettingsRow extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final bool? toggleValue;             // задан → рисуем Switch
+  final bool? toggleValue; // задан → рисуем Switch
   final ValueChanged<bool>? onToggle;
-  final VoidCallback? onTap;           // задан (и не toggle) → строка кликабельна
-  final String? trailingText;          // напр. статус MINI+
+  final VoidCallback? onTap; // задан (и не toggle) → строка кликабельна
+  final String? trailingText; // напр. статус MINI+
 
   const SettingsRow({
     super.key,
@@ -38,7 +38,8 @@ class SettingsRow extends StatelessWidget {
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
-                        style: AppText.sans(13, color: AppColors.inkSoft, height: 1.35)),
+                        style: AppText.sans(13,
+                            color: AppColors.inkSoft, height: 1.35)),
                   ],
                 ],
               ),
@@ -46,19 +47,21 @@ class SettingsRow extends StatelessWidget {
             if (trailingText != null)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: Text(trailingText!, style: AppText.sans(13, color: AppColors.inkFaint)),
+                child: Text(trailingText!,
+                    style: AppText.sans(13, color: AppColors.inkFaint)),
               ),
             if (isToggle)
               Switch(
                 value: toggleValue!,
                 onChanged: onToggle,
-                activeColor: Colors.white,
+                activeThumbColor: Colors.white,
                 activeTrackColor: AppColors.ink,
-                inactiveColor: Colors.white,
+                inactiveThumbColor: Colors.white,
                 inactiveTrackColor: AppColors.rule,
               )
             else if (onTap != null)
-              const Icon(Icons.chevron_right, color: AppColors.inkFaint, size: 22),
+              const Icon(Icons.chevron_right,
+                  color: AppColors.inkFaint, size: 22),
           ],
         ),
       ),
