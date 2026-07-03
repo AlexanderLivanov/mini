@@ -5,11 +5,13 @@ workflows:
     max_build_duration: 60
 
     environment:
-      # ВАЖНО: пиним точную версию Flutter, а не 'stable'.
-      # 'stable' плавает и однажды сломает сборку сменой поведения (как сейчас).
-      # Подставь версию, на которой собирался рабочий +1 (flutter --version),
-      # либо любую известно-рабочую. Пример:
-      flutter: 3.32.0
+      # Пинить НУЖНО — но ПАРОЙ и на ИЗВЕСТНО-РАБОЧУЮ комбинацию.
+      # Возвращаю stable, чтобы Flutter снова совпал с 'xcode: latest' —
+      # это среда, на которой собрался твой первый рабочий IPA.
+      # Как получишь зелёную сборку: открой её лог, найди строки вида
+      #   "Flutter 3.x.y" и версию Xcode — и вот ЭТУ пару потом закрепи здесь
+      #   (flutter: 3.x.y  и  xcode: 16.x), чтобы сборка стала детерминированной.
+      flutter: stable
       xcode: latest
       cocoapods: default
 
@@ -17,27 +19,29 @@ workflows:
       - name: Flutter packages
         script: flutter pub get
 
-      # Flutter сам корректно собирает .app (ставит поды, склеивает xcconfig,
-      # прогоняет Run Script). В этой версии он доходит до "Xcode build done",
-      # а затем падает на пост-шаге деплоя, требующем подпись. Нам этот пост-шаг
-      # не нужен: мы забираем уже собранный .app. Поэтому глушим код возврата —
-      # успех определяем не по exit code (он врёт), а по наличию артефакта ниже.
-      - name: Build unsigned app (ignore misleading post-step)
-        script: flutter build ios --release --no-codesign || true
+      # Собираем .app. Flutter в этой версии доходит до "Xcode build done",
+      # затем падает на ненужном нам пост-шаге подписи. Мы ловим ВЕСЬ вывод в лог,
+      # глушим (обманчивый) код возврата и решаем по факту наличия .app.
+      # Если .app нет — печатаем настоящие ошибки и падаем внятно.
+      - name: Build unsigned app (self-diagnosing)
+        script: |
+          set -o pipefail
+          flutter build ios --release --no-codesign 2>&1 | tee /tmp/b.log || true
+          if [ -d build/ios/iphoneos/Runner.app ]; then
+            echo "OK: .app создан — пост-шаг подписи игнорируем."
+          else
+            echo "==================== .app НЕ создан. РЕАЛЬНЫЕ ОШИБКИ: ===================="
+            grep -nEi "error:|exception|could not|no such|not found|fatal|fail|xcodebuild|codesign|swift|deployment|sdk" /tmp/b.log | tail -n 100
+            echo "==================== ХВОСТ ЛОГА: ===================="
+            tail -n 70 /tmp/b.log
+            exit 1
+          fi
 
-      # Упаковываем .app в .ipa. Здесь и находится настоящая проверка успеха:
-      # если .app не создан — значит сборка реально упала, падаем внятно.
       - name: Package unsigned IPA
         script: |
           set -e
           APP=build/ios/iphoneos/Runner.app
-          if [ ! -d "$APP" ]; then
-            echo "ОШИБКА: $APP не создан — сборка упала ДО генерации .app."
-            echo "Содержимое build/ios/iphoneos:"
-            ls -la build/ios/iphoneos || true
-            exit 1
-          fi
-          echo "Найден .app: $APP"
+          [ -d "$APP" ] || { echo "нет .app"; exit 1; }
           rm -rf Payload MINI-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
